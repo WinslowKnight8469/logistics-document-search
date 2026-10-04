@@ -1,0 +1,23 @@
+{
+  "name": "logistics-document-search",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx src/logistics_server.ts",
+    "query": "tsx src/search_cli.ts",
+    "test": "tsx --test test/exception_ranking.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "express": "^5.1.0",
+    "openai": "^6.0.0",
+    "zod": "^4.1.5"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.3",
+    "@types/node": "^24.3.0",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2"
+  }
+}
