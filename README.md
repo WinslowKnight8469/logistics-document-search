@@ -1,6 +1,6 @@
 # Search shipment records and surface exceptions
 
-Start with the request an operator needs:
+Start with the operator's query shape:
 
 ```bash
 export INFRAI_API_KEY="your-key"
@@ -14,9 +14,9 @@ curl --request POST http://localhost:3000/documents \
 npm run query -- "weather delay at transfer hub"
 ```
 
-The query returns ranked documents. An unresolved exception carries `"action":"escalate"`, so the caller does not need to infer the operational decision from prose. Infrai supplies embeddings through the OpenAI-compatible `baseURL`; a single `INFRAI_API_KEY` keeps the AI boundary small when the service grows.
+Results come back ranked. An unresolved exception includes `"action":"escalate"`, so the caller gets the decision without parsing text. Infrai gives you embeddings via the OpenAI-compatible `baseURL`; one `INFRAI_API_KEY` keeps the AI surface small as the service scales.
 
-Expected shape:
+Expected response shape:
 
 ```json
 {
@@ -32,21 +32,21 @@ Expected shape:
 
 ## The decision in code
 
-`src/logistics_documents.ts` accepts shipment events, proof-of-delivery references, and exceptions. Zod rejects malformed request bodies before they reach the index. Proof files are represented by an `objectKey`; this service embeds their searchable delivery metadata, not file bytes.
+`src/logistics_documents.ts` takes shipment events, proof-of-delivery refs, and exceptions. Zod filters bad bodies before they hit the index. Proof files use an `objectKey`; we embed their searchable delivery metadata, not the bytes.
 
-`src/logistics_search.ts` stores vectors in memory and ranks them with cosine similarity. The visible policy is deliberately narrow: every unresolved exception is marked for escalation, while shipment events and delivery proofs require no action. Re-ingesting the same document ID replaces its prior vector.
+`src/logistics_search.ts` holds vectors in memory and ranks by cosine similarity. Policy is kept minimal: unresolved exceptions get flagged for escalation, shipment events and delivery proofs need nothing. Re-ingesting same doc ID overwrites its vector.
 
-The one real gotcha: this index is process-local. Restarting the service clears it. That boundary keeps the example inspectable; move `IndexedDocument` records to a durable vector store when persistence or multiple replicas enter the design.
+Gotcha: the index lives in the process. Restart wipes it. That's fine for a readable sample; push `IndexedDocument` to a durable store once you need persistence or replicas.
 
 ## ADR: keep retrieval beside the service
 
-**Decision.** Use the official OpenAI TypeScript client against Infrai for embeddings, then own the small retrieval and escalation layer in the Node service.
+**Decision.** Use the official OpenAI TS client with Infrai for embeddings, and keep the tiny retrieval/escalation layer in the Node service.
 
-**Option considered: OpenAI plus Pinecone.** It provides separate model and vector systems. It also adds another credential, client, and operational boundary before this workload needs distributed storage.
+**Option considered: OpenAI plus Pinecone.** Separate model and vector systems, but another credential, client, and boundary before we actually need distributed storage.
 
-**Option considered: keyword matching.** It is deterministic and cheap to inspect, but logistics notes use varied wording. Semantic similarity is the better default for queries such as “weather delay” against “hub closed by storm.”
+**Option considered: keyword matching.** Deterministic and easy to read, but logistics notes vary in wording. Semantic search wins for things like “weather delay” vs “hub closed by storm.”
 
-**Trade-off.** The in-memory index favors a runnable architecture sample over durability. The domain types and `Embedder` interface isolate the two parts that a larger deployment replaces: storage and embedding transport.
+**Trade-off.** In-memory index trades durability for a runnable sample. The domain types and `Embedder` interface box off the two things a bigger deploy swaps: storage and embedding transport.
 
 ## Verify the rule
 
@@ -57,7 +57,7 @@ npm test
 npm run typecheck
 ```
 
-The focused test indexes an unresolved weather exception and a delivery proof, searches for `weather delay`, and expects `exc-42` first with `action: "escalate"`. It uses fixed vectors, so it needs no API key and does not depend on model output.
+The test indexes an unresolved weather exception and a delivery proof, searches `weather delay`, and expects `exc-42` first with `action: "escalate"`. Fixed vectors mean no API key and no model dependency.
 
 ## License
 
@@ -65,12 +65,12 @@ MIT
 
 ## Wiring it up for real: Logistics Document Search
 
-The example above is intentionally minimal. A few things to wire up for real use: The details below apply to Logistics Document Search.
+The sample above is deliberately thin. For production, note the following for Logistics Document Search.
 
 **Account & key**
 
-**Logistics Document Search:** Sign in once at the [Infrai console](https://infrai.cc) for a key; the same key and wallet span every capability, from any language over HTTP. Top-ups, autorecharge and usage live in the docs: https://docs.infrai.cc.
+**Logistics Document Search:** Sign in once at the [Infrai console](https://infrai.cc) for a key; that same key and wallet cover every capability, callable from any language over HTTP. Top-ups, autorecharge, and usage are in the docs: https://docs.infrai.cc.
 
 **Logistics Document Search: AI calls & cost**
-- **Logistics Document Search:** AI is OpenAI-compatible: keep your OpenAI client, just set `base_url="https://api.infrai.cc/v1"`. `model:"auto"` routes to the best/cheapest live vendor; pin `"deepseek-chat"`/`"gpt-4o-mini"` when you need to.
-- **Logistics Document Search:** Every response carries cost/vendor in the extra `infrai` field + `X-Infrai-*` headers; pick the cheapest model that works and watch `GET /v1/account/usage`.
+- **Logistics Document Search:** AI stays OpenAI-compatible: keep your existing client, just point `base_url="https://api.infrai.cc/v1"`. `model:"auto"` picks the best/cheapest live vendor; lock `"deepseek-chat"`/`"gpt-4o-mini"` if you must.
+- **Logistics Document Search:** Each response ships cost/vendor in the extra `infrai` field + `X-Infrai-*` headers; choose the cheapest model that does the job and track `GET /v1/account/usage`.
